@@ -82,12 +82,13 @@
 <body>
   <div class="container">
     <h1>🦖 Chrome Dino Game</h1>
-    <p class="info">Jump over cacti, duck under birds, and watch the day turn to night!</p>
+    <p class="info">Jump over cacti, duck under birds! In Shooting Mode, blast the birds with your gun!</p>
     <canvas id="gameCanvas" width="800" height="200" role="application" aria-label="Chrome Dino Game canvas. Jump over cacti, duck under birds, and watch the day turn to night!"></canvas>
     <div class="score">Score: <span id="score">0</span></div>
     <div class="high-score">High Score: <span id="highScore">0</span></div>
-    <div class="game-over" id="gameOver">Game Over! Press SPACE or Click to Restart</div>
-    <div class="controls">SPACE/UP: Jump | DOWN: Duck | Click to start/jump</div>
+    <div class="game-over" id="gameOver">Game Over! SPACE: Classic | ENTER: Shooting</div>
+    <div class="bird-score" id="birdScore" style="display: none; margin-top: 5px; font-size: 16px; color: #d63031;"></div>
+    <div class="controls">SPACE: Classic Mode | ENTER: Shooting Mode | UP/W: Jump | DOWN/S: Duck</div>
     <div class="footer">
       Made by <a href="https://github.com/andreasHovaldt" target="_blank">Andreas Højrup</a>
     </div>
@@ -99,17 +100,29 @@
     const scoreElement = document.getElementById('score');
     const highScoreElement = document.getElementById('highScore');
     const gameOverElement = document.getElementById('gameOver');
+    const birdScoreElement = document.getElementById('birdScore');
 
     // Game variables
     let gameStarted = false;
     let gameOver = false;
+    let gameMode = 'classic'; // 'classic' or 'shooting'
     let score = 0;
     let distance = 0;
     let highScore = localStorage.getItem('dinoHighScore') || 0;
+    let highScoreShooting = localStorage.getItem('dinoHighScoreShooting') || 0;
     highScoreElement.textContent = highScore;
     let frameCount = 0;
     let gameSpeed = 6;
     let nightProgress = 0; // 0 = day, 1 = night (gradual transition)
+
+    // Shooting mode variables
+    let birdsKilled = 0;
+    let bullets = [];
+    let explosions = [];
+    let mouseX = canvas.width / 2;
+    let mouseY = canvas.height / 2;
+    let lastShotTime = 0;
+    const shootCooldown = 300; // 0.3 seconds in milliseconds
 
     // Dino properties
     const dino = {
@@ -367,6 +380,152 @@
       }
     }
 
+    // Draw handgun for shooting mode
+    function drawGun() {
+      if (gameMode !== 'shooting') return;
+
+      const theme = getColors();
+      const px = 3;
+      const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
+
+      // Calculate angle to mouse
+      const gunX = dino.x + (dino.isDucking ? 40 : 30);
+      const gunY = currentY + (dino.isDucking ? 12 : 21);
+      const angle = Math.atan2(mouseY - gunY, mouseX - gunX);
+
+      ctx.save();
+      ctx.translate(gunX, gunY);
+      ctx.rotate(angle);
+
+      // Draw gun body
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0, -4, 20, 8); // barrel
+      ctx.fillRect(-5, -6, 12, 12); // grip area
+      ctx.fillRect(-5, 0, 8, 10); // handle
+
+      ctx.restore();
+    }
+
+    // Create bullet (with cooldown check)
+    function createBullet() {
+      const now = Date.now();
+      if (now - lastShotTime < shootCooldown) return; // Cooldown not ready
+      lastShotTime = now;
+
+      const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
+      const gunX = dino.x + (dino.isDucking ? 40 : 30);
+      const gunY = currentY + (dino.isDucking ? 12 : 21);
+      const angle = Math.atan2(mouseY - gunY, mouseX - gunX);
+
+      bullets.push({
+        x: gunX + Math.cos(angle) * 20,
+        y: gunY + Math.sin(angle) * 20,
+        vx: Math.cos(angle) * 15,
+        vy: Math.sin(angle) * 15
+      });
+    }
+
+    // Draw bullets
+    function drawBullets() {
+      ctx.fillStyle = '#ff6600';
+      bullets.forEach(bullet => {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // Update bullets
+    function updateBullets() {
+      bullets.forEach(bullet => {
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+      });
+
+      // Remove off-screen bullets
+      bullets = bullets.filter(b => b.x >= 0 && b.x <= canvas.width && b.y >= 0 && b.y <= canvas.height);
+    }
+
+    // Create explosion
+    function createExplosion(x, y) {
+      explosions.push({
+        x: x,
+        y: y,
+        frame: 0,
+        maxFrames: 15
+      });
+    }
+
+    // Draw explosions
+    function drawExplosions() {
+      explosions.forEach(exp => {
+        const progress = exp.frame / exp.maxFrames;
+        const radius = 10 + progress * 25;
+        const alpha = 1 - progress;
+
+        // Outer explosion
+        ctx.fillStyle = `rgba(255, 100, 0, ${alpha * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Inner explosion
+        ctx.fillStyle = `rgba(255, 200, 0, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(exp.x, exp.y, radius * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // Update explosions
+    function updateExplosions() {
+      explosions.forEach(exp => {
+        exp.frame++;
+      });
+
+      // Remove finished explosions
+      explosions = explosions.filter(exp => exp.frame < exp.maxFrames);
+    }
+
+    // Check bullet-bird collisions
+    function checkBulletCollisions() {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+
+        for (let j = obstacles.length - 1; j >= 0; j--) {
+          const obstacle = obstacles[j];
+
+          if (obstacle.type === 'bird') {
+            // Check if bullet hits bird
+            if (
+              bullet.x >= obstacle.x &&
+              bullet.x <= obstacle.x + obstacle.width + 10 &&
+              bullet.y >= obstacle.y &&
+              bullet.y <= obstacle.y + obstacle.height
+            ) {
+              // Create explosion at bird position
+              createExplosion(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
+
+              // Remove bird and bullet
+              obstacles.splice(j, 1);
+              bullets.splice(i, 1);
+
+              // Increment bird kill counter
+              birdsKilled++;
+
+              break;
+            }
+          }
+        }
+      }
+    }
+
     // Draw ground
     function drawGround() {
       const theme = getColors();
@@ -596,16 +755,27 @@
     }
 
     // Reset game
-    function resetGame() {
+    function resetGame(mode) {
       gameOver = false;
       gameStarted = true;
+      gameMode = mode || gameMode;
 
-      // Update high score
-      if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('dinoHighScore', highScore);
-        highScoreElement.textContent = highScore;
+      // Update high score based on mode
+      const currentHighScore = gameMode === 'shooting' ? highScoreShooting : highScore;
+      const finalScore = gameMode === 'shooting' ? score + (birdsKilled * 50) : score;
+
+      if (finalScore > currentHighScore) {
+        if (gameMode === 'shooting') {
+          highScoreShooting = finalScore;
+          localStorage.setItem('dinoHighScoreShooting', highScoreShooting);
+        } else {
+          highScore = finalScore;
+          localStorage.setItem('dinoHighScore', highScore);
+        }
       }
+
+      // Update displayed high score based on mode
+      highScoreElement.textContent = gameMode === 'shooting' ? highScoreShooting : highScore;
 
       score = 0;
       distance = 0;
@@ -622,6 +792,12 @@
       dino.isFastFalling = false;
       scoreElement.textContent = '0';
       gameOverElement.style.display = 'none';
+      birdScoreElement.style.display = 'none';
+
+      // Reset shooting mode variables
+      birdsKilled = 0;
+      bullets = [];
+      explosions = [];
     }
 
     // Game loop
@@ -644,7 +820,8 @@
         ctx.fillStyle = theme.text;
         ctx.font = '20px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Press SPACE or Click to Start', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Press SPACE for Classic Mode', canvas.width / 2, canvas.height / 2 - 15);
+        ctx.fillText('Press ENTER for Shooting Mode', canvas.width / 2, canvas.height / 2 + 15);
         drawGround();
         drawDino();
       } else if (!gameOver) {
@@ -654,16 +831,38 @@
         updateObstacles();
         updateScore();
 
+        // Shooting mode updates
+        if (gameMode === 'shooting') {
+          updateBullets();
+          updateExplosions();
+          checkBulletCollisions();
+        }
+
         // Check collision
         if (checkCollision()) {
           gameOver = true;
           gameOverElement.style.display = 'block';
 
+          // Calculate final score for shooting mode
+          const finalScore = gameMode === 'shooting' ? score + (birdsKilled * 50) : score;
+          const currentHighScore = gameMode === 'shooting' ? highScoreShooting : highScore;
+
           // Update high score
-          if (score > highScore) {
-            highScore = score;
-            localStorage.setItem('dinoHighScore', highScore);
-            highScoreElement.textContent = highScore;
+          if (finalScore > currentHighScore) {
+            if (gameMode === 'shooting') {
+              highScoreShooting = finalScore;
+              localStorage.setItem('dinoHighScoreShooting', highScoreShooting);
+            } else {
+              highScore = finalScore;
+              localStorage.setItem('dinoHighScore', highScore);
+            }
+            highScoreElement.textContent = gameMode === 'shooting' ? highScoreShooting : highScore;
+          }
+
+          // Show bird score in shooting mode
+          if (gameMode === 'shooting' && birdsKilled > 0) {
+            birdScoreElement.textContent = `Birds Eliminated: ${birdsKilled} (+${birdsKilled * 50} pts)`;
+            birdScoreElement.style.display = 'block';
           }
         }
 
@@ -671,20 +870,47 @@
         drawGround();
         drawObstacles();
         drawDino();
+
+        // Shooting mode drawing
+        if (gameMode === 'shooting') {
+          drawGun();
+          drawBullets();
+          drawExplosions();
+
+          // Draw bird kill counter
+          ctx.fillStyle = '#d63031';
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'left';
+          ctx.fillText('🎯 ' + birdsKilled, 10, 20);
+        }
       } else {
         // Game over screen
         drawGround();
         drawObstacles();
         drawDino();
 
+        // Draw remaining explosions
+        if (gameMode === 'shooting') {
+          drawExplosions();
+          updateExplosions();
+        }
+
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = lerpColor('#000000', '#ffffff', nightProgress);
         ctx.font = 'bold 30px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 30);
         ctx.font = '18px Arial';
-        ctx.fillText('Score: ' + score, canvas.width / 2, canvas.height / 2 + 20);
+
+        if (gameMode === 'shooting') {
+          const finalScore = score + (birdsKilled * 50);
+          ctx.fillText('Distance: ' + score + ' | Birds: ' + birdsKilled + ' (+' + (birdsKilled * 50) + ')', canvas.width / 2, canvas.height / 2 + 5);
+          ctx.font = 'bold 20px Arial';
+          ctx.fillText('Total: ' + finalScore, canvas.width / 2, canvas.height / 2 + 35);
+        } else {
+          ctx.fillText('Score: ' + score, canvas.width / 2, canvas.height / 2 + 10);
+        }
       }
 
       requestAnimationFrame(gameLoop);
@@ -694,16 +920,32 @@
     let keysPressed = {};
 
     document.addEventListener('keydown', (e) => {
-      if (e.code === 'Space' || e.code === 'ArrowUp') {
+      // Space - Start/restart classic mode
+      if (e.code === 'Space') {
         e.preventDefault();
         if (!gameStarted || gameOver) {
-          resetGame();
-        } else {
+          resetGame('classic');
+        }
+      }
+
+      // Enter - Start/restart shooting mode
+      if (e.code === 'Enter') {
+        e.preventDefault();
+        if (!gameStarted || gameOver) {
+          resetGame('shooting');
+        }
+      }
+
+      // Jump - Up arrow or W
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+        e.preventDefault();
+        if (gameStarted && !gameOver) {
           jump();
         }
       }
 
-      if (e.code === 'ArrowDown') {
+      // Duck - Down arrow or S
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') {
         e.preventDefault();
         if (gameStarted && !gameOver) {
           duck();
@@ -714,40 +956,55 @@
     });
 
     document.addEventListener('keyup', (e) => {
-      if (e.code === 'ArrowDown') {
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') {
         standUp();
       }
       keysPressed[e.code] = false;
     });
 
-    canvas.addEventListener('click', () => {
-      if (!gameStarted || gameOver) {
-        resetGame();
-      } else {
-        jump();
+    // Mouse tracking for aiming
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    // Click to shoot (only in shooting mode during gameplay)
+    canvas.addEventListener('click', (e) => {
+      if (gameMode === 'shooting' && gameStarted && !gameOver) {
+        createBullet();
       }
     });
 
     // Touch events for mobile
     let touchStartY = 0;
+    let touchStartX = 0;
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
 
-      if (!gameStarted || gameOver) {
-        resetGame();
-      }
+      // Update mouse position for shooting mode aiming
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.touches[0].clientX - rect.left;
+      mouseY = e.touches[0].clientY - rect.top;
     });
 
     canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
       const touchY = e.touches[0].clientY;
-      const diff = touchStartY - touchY;
+      const touchX = e.touches[0].clientX;
+      const diffY = touchStartY - touchY;
+
+      // Update mouse position for shooting mode aiming
+      const rect = canvas.getBoundingClientRect();
+      mouseX = touchX - rect.left;
+      mouseY = touchY - rect.top;
 
       if (gameStarted && !gameOver) {
-        if (diff > 20) {
+        if (diffY > 30) {
           jump();
-        } else if (diff < -20) {
+        } else if (diffY < -30) {
           duck();
         }
       }
@@ -756,6 +1013,11 @@
     canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
       standUp();
+
+      // Tap to shoot in shooting mode
+      if (gameMode === 'shooting' && gameStarted && !gameOver) {
+        createBullet();
+      }
     });
 
     // Make canvas focusable
