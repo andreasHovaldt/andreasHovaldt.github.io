@@ -511,9 +511,9 @@
         createObstacle();
       }
 
-      // Increase game speed over time
-      if (frameCount % 100 === 0 && gameStarted && !gameOver) {
-        gameSpeed = Math.min(gameSpeed + 0.005, 13);
+      // Increase game speed over time (accelerates as you play, no cap)
+      if (frameCount % 60 === 0 && gameStarted && !gameOver) {
+        gameSpeed += 0.1;
       }
     }
 
