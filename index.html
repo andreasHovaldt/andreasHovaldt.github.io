@@ -214,7 +214,7 @@
     // Draw dino - pixel art style
     function drawDino() {
       const theme = getColors();
-      const eyeColor = isNightMode ? '#000' : '#fff';
+      const eyeColor = nightProgress > 0.5 ? '#000' : '#fff';
       const px = 3; // pixel size for scaling
 
       const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
@@ -224,17 +224,6 @@
       const animSpeed = Math.max(2, 7 - gameSpeed / 2);
       const runFrame = Math.floor(frameCount / animSpeed) % 2;
 
-      // Eye (interpolate between white and black based on nightProgress)
-      ctx.fillStyle = lerpColor('#ffffff', '#000000', nightProgress);
-      ctx.fillRect(dino.x + 28, currentY + 8, 6, 6);
-
-      // Legs (animated when on ground - speed increases with game speed)
-      if (currentY >= ground.y - currentHeight && !dino.isDucking) {
-        ctx.fillStyle = theme.dino;
-        const animSpeed = Math.max(2, 7 - gameSpeed / 2);
-        const legOffset = Math.floor(frameCount / animSpeed) % 2 === 0 ? 0 : 4;
-        ctx.fillRect(dino.x + 8, currentY + currentHeight, 6, 8);
-        ctx.fillRect(dino.x + 26 + legOffset, currentY + currentHeight, 6, 8);
       // Helper to draw a pixel
       function pixel(x, y, color) {
         ctx.fillStyle = color || theme.dino;
@@ -718,7 +707,7 @@
         e.preventDefault();
         if (gameStarted && !gameOver) {
           duck();
-        }#525252
+        }
       }
 
       keysPressed[e.code] = true;
