@@ -77,24 +77,67 @@
       color: #0366d6;
       text-decoration: none;
     }
+    .mobile-message {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .mobile-message h2 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .mobile-message p {
+      color: #555;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .mobile-message .emoji {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🦖 Chrome Dino Game</h1>
-    <p class="info">Jump over cacti, duck under birds! In Shooting Mode, blast the birds with your gun!</p>
-    <canvas id="gameCanvas" width="800" height="200" role="application" aria-label="Chrome Dino Game canvas. Jump over cacti, duck under birds, and watch the day turn to night!"></canvas>
-    <div class="score">Score: <span id="score">0</span></div>
-    <div class="high-score">High Score: <span id="highScore">0</span></div>
-    <div class="game-over" id="gameOver">Game Over! SPACE: Classic | ENTER: Shooting</div>
-    <div class="bird-score" id="birdScore" style="display: none; margin-top: 5px; font-size: 16px; color: #d63031;"></div>
-    <div class="controls">SPACE: Classic Mode | ENTER: Shooting Mode | UP/W: Jump | DOWN/S: Duck | LEFT/A - RIGHT/D: Move</div>
-    <div class="footer">
-      Made by <a href="https://github.com/andreasHovaldt" target="_blank">Andreas Højrup</a>
+    <!-- Mobile message (shown only on mobile devices) -->
+    <div class="mobile-message" id="mobileMessage">
+      <div class="emoji">🦖💻</div>
+      <h2>Desktop Only</h2>
+      <p>This game was designed for computers with a keyboard.</p>
+      <p>Please visit this page from a desktop or laptop computer to play!</p>
+    </div>
+
+    <!-- Game content (hidden on mobile) -->
+    <div id="gameContent">
+      <h1>🦖 Chrome Dino Game</h1>
+      <p class="info">Jump over cacti, duck under birds! In Shooting Mode, blast the birds with your gun!</p>
+      <canvas id="gameCanvas" width="800" height="200" role="application" aria-label="Chrome Dino Game canvas. Jump over cacti, duck under birds, and watch the day turn to night!"></canvas>
+      <div class="score">Score: <span id="score">0</span></div>
+      <div class="high-score">High Score: <span id="highScore">0</span></div>
+      <div class="game-over" id="gameOver">Game Over! SPACE: Classic | ENTER: Shooting</div>
+      <div class="bird-score" id="birdScore" style="display: none; margin-top: 5px; font-size: 16px; color: #d63031;"></div>
+      <div class="controls">SPACE: Classic Mode | ENTER: Shooting Mode | UP/W: Jump | DOWN/S: Duck | LEFT/A - RIGHT/D: Move</div>
+      <div class="footer">
+        Made by <a href="https://github.com/andreasHovaldt" target="_blank">Andreas Højrup</a>
+      </div>
     </div>
   </div>
 
   <script>
+    // Mobile device detection
+    function isMobileDevice() {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+             (window.matchMedia && window.matchMedia('(max-width: 768px)').matches && 'ontouchstart' in window);
+    }
+
+    // Check for mobile and show appropriate content
+    if (isMobileDevice()) {
+      document.getElementById('mobileMessage').style.display = 'block';
+      document.getElementById('gameContent').style.display = 'none';
+      throw new Error('Mobile device detected - game not loaded');
+    }
+
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreElement = document.getElementById('score');
