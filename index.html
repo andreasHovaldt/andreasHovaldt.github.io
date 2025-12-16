@@ -3,32 +3,73 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to My GitHub Pages</title>
+  <title>Dino Game - Andreas Højrup</title>
   <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
     body {
       font-family: Arial, sans-serif;
       background-color: #f4f4f4;
-      margin: 0;
-      padding: 0;
       display: flex;
+      flex-direction: column;
       height: 100vh;
       justify-content: center;
       align-items: center;
+      overflow: hidden;
     }
     .container {
       text-align: center;
       background: white;
-      padding: 40px;
+      padding: 30px;
       border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 900px;
+      width: 95%;
     }
     h1 {
       margin-bottom: 10px;
+      font-size: 28px;
     }
-    p {
+    .info {
       color: #555;
+      margin-bottom: 20px;
+      font-size: 14px;
     }
-    a {
+    #gameCanvas {
+      border: 2px solid #333;
+      border-radius: 4px;
+      background: #fff;
+      display: block;
+      margin: 0 auto;
+      cursor: pointer;
+    }
+    .score {
+      margin-top: 15px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+    }
+    .controls {
+      margin-top: 15px;
+      color: #666;
+      font-size: 13px;
+    }
+    .game-over {
+      display: none;
+      color: #d63031;
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 15px;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #888;
+    }
+    .footer a {
       color: #0366d6;
       text-decoration: none;
     }
@@ -36,9 +77,265 @@
 </head>
 <body>
   <div class="container">
-    <h1>Hello, World! 👋</h1>
-    <p>Welcome to my GitHub Pages site.</p>
-    <p>Check out my work on <a href="https://github.com/andreasHovaldt" target="_blank">GitHub</a>.</p>
+    <h1>🦖 Dino Game</h1>
+    <p class="info">Jump over the cacti and see how far you can go!</p>
+    <canvas id="gameCanvas" width="800" height="200"></canvas>
+    <div class="score">Score: <span id="score">0</span></div>
+    <div class="game-over" id="gameOver">Game Over! Press SPACE or Click to Restart</div>
+    <div class="controls">Press SPACE or UP ARROW to jump | Click canvas to start/restart</div>
+    <div class="footer">
+      Made by <a href="https://github.com/andreasHovaldt" target="_blank">Andreas Højrup</a>
+    </div>
   </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const gameOverElement = document.getElementById('gameOver');
+
+    // Game variables
+    let gameStarted = false;
+    let gameOver = false;
+    let score = 0;
+    let frameCount = 0;
+
+    // Dino properties
+    const dino = {
+      x: 50,
+      y: 150,
+      width: 40,
+      height: 50,
+      velocityY: 0,
+      gravity: 0.6,
+      jumpPower: -12,
+      isJumping: false
+    };
+
+    // Ground
+    const ground = {
+      y: 180,
+      height: 20
+    };
+
+    // Obstacles array
+    let obstacles = [];
+    const obstacleWidth = 20;
+    const obstacleHeight = 50;
+    let obstacleSpeed = 5;
+    let obstacleFrequency = 100;
+
+    // Create obstacle
+    function createObstacle() {
+      obstacles.push({
+        x: canvas.width,
+        y: ground.y - obstacleHeight,
+        width: obstacleWidth,
+        height: obstacleHeight
+      });
+    }
+
+    // Draw dino
+    function drawDino() {
+      ctx.fillStyle = '#555';
+      ctx.fillRect(dino.x, dino.y, dino.width, dino.height);
+
+      // Eyes
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(dino.x + 25, dino.y + 10, 8, 8);
+
+      // Legs (simple animation)
+      ctx.fillStyle = '#555';
+      const legOffset = Math.floor(frameCount / 10) % 2 === 0 ? 0 : 5;
+      ctx.fillRect(dino.x + 10, dino.y + dino.height, 8, 10);
+      ctx.fillRect(dino.x + 25 + legOffset, dino.y + dino.height, 8, 10);
+    }
+
+    // Draw ground
+    function drawGround() {
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0, ground.y, canvas.width, ground.height);
+
+      // Ground line pattern
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < canvas.width; i += 20) {
+        ctx.moveTo(i + (frameCount % 20), ground.y);
+        ctx.lineTo(i + 10 + (frameCount % 20), ground.y);
+      }
+      ctx.stroke();
+    }
+
+    // Draw obstacles
+    function drawObstacles() {
+      ctx.fillStyle = '#2d8659';
+      obstacles.forEach(obstacle => {
+        // Cactus body
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+        // Cactus arms
+        ctx.fillRect(obstacle.x - 8, obstacle.y + 15, 8, 20);
+        ctx.fillRect(obstacle.x + obstacle.width, obstacle.y + 20, 8, 15);
+      });
+    }
+
+    // Update dino physics
+    function updateDino() {
+      if (dino.isJumping || dino.y < ground.y - dino.height) {
+        dino.velocityY += dino.gravity;
+        dino.y += dino.velocityY;
+
+        if (dino.y >= ground.y - dino.height) {
+          dino.y = ground.y - dino.height;
+          dino.velocityY = 0;
+          dino.isJumping = false;
+        }
+      }
+    }
+
+    // Update obstacles
+    function updateObstacles() {
+      // Move obstacles
+      obstacles.forEach(obstacle => {
+        obstacle.x -= obstacleSpeed;
+      });
+
+      // Remove off-screen obstacles and increase score
+      obstacles = obstacles.filter(obstacle => {
+        if (obstacle.x + obstacle.width < 0) {
+          score += 10;
+          scoreElement.textContent = score;
+          return false;
+        }
+        return true;
+      });
+
+      // Create new obstacles
+      if (frameCount % obstacleFrequency === 0 && gameStarted && !gameOver) {
+        createObstacle();
+      }
+
+      // Increase difficulty over time
+      if (score > 0 && score % 100 === 0 && frameCount % obstacleFrequency === 0) {
+        obstacleSpeed = Math.min(obstacleSpeed + 0.5, 10);
+        obstacleFrequency = Math.max(obstacleFrequency - 5, 60);
+      }
+    }
+
+    // Check collision
+    function checkCollision() {
+      for (let obstacle of obstacles) {
+        if (
+          dino.x < obstacle.x + obstacle.width &&
+          dino.x + dino.width > obstacle.x &&
+          dino.y < obstacle.y + obstacle.height &&
+          dino.y + dino.height > obstacle.y
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Jump function
+    function jump() {
+      if (!dino.isJumping && dino.y === ground.y - dino.height) {
+        dino.velocityY = dino.jumpPower;
+        dino.isJumping = true;
+      }
+    }
+
+    // Reset game
+    function resetGame() {
+      gameOver = false;
+      gameStarted = true;
+      score = 0;
+      frameCount = 0;
+      obstacleSpeed = 5;
+      obstacleFrequency = 100;
+      obstacles = [];
+      dino.y = ground.y - dino.height;
+      dino.velocityY = 0;
+      dino.isJumping = false;
+      scoreElement.textContent = '0';
+      gameOverElement.style.display = 'none';
+    }
+
+    // Game loop
+    function gameLoop() {
+      // Clear canvas
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!gameStarted) {
+        // Draw start screen
+        ctx.fillStyle = '#999';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Press SPACE or Click to Start', canvas.width / 2, canvas.height / 2);
+        drawGround();
+        drawDino();
+      } else if (!gameOver) {
+        // Update game
+        frameCount++;
+        updateDino();
+        updateObstacles();
+
+        // Check collision
+        if (checkCollision()) {
+          gameOver = true;
+          gameOverElement.style.display = 'block';
+        }
+
+        // Draw everything
+        drawGround();
+        drawObstacles();
+        drawDino();
+      } else {
+        // Game over screen
+        drawGround();
+        drawObstacles();
+        drawDino();
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 30px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = '18px Arial';
+        ctx.fillText('Final Score: ' + score, canvas.width / 2, canvas.height / 2 + 20);
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Event listeners
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (!gameStarted || gameOver) {
+          resetGame();
+        } else {
+          jump();
+        }
+      }
+    });
+
+    canvas.addEventListener('click', () => {
+      if (!gameStarted || gameOver) {
+        resetGame();
+      } else {
+        jump();
+      }
+    });
+
+    // Make canvas focusable
+    canvas.tabIndex = 1;
+
+    // Start game loop
+    gameLoop();
+  </script>
 </body>
 </html>
