@@ -109,7 +109,7 @@
     highScoreElement.textContent = highScore;
     let frameCount = 0;
     let gameSpeed = 6;
-    let isNightMode = false;
+    let nightProgress = 0; // 0 = day, 1 = night (gradual transition)
 
     // Dino properties
     const dino = {
@@ -156,9 +156,27 @@
       }
     };
 
-    // Get current theme colors
+    // Interpolate between two hex colors
+    function lerpColor(color1, color2, t) {
+      const c1 = parseInt(color1.slice(1), 16);
+      const c2 = parseInt(color2.slice(1), 16);
+      const r1 = (c1 >> 16) & 0xff, g1 = (c1 >> 8) & 0xff, b1 = c1 & 0xff;
+      const r2 = (c2 >> 16) & 0xff, g2 = (c2 >> 8) & 0xff, b2 = c2 & 0xff;
+      const r = Math.round(r1 + (r2 - r1) * t);
+      const g = Math.round(g1 + (g2 - g1) * t);
+      const b = Math.round(b1 + (b2 - b1) * t);
+      return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+    }
+
+    // Get current theme colors (interpolated based on nightProgress)
     function getColors() {
-      return isNightMode ? colors.night : colors.day;
+      return {
+        bg: lerpColor(colors.day.bg, colors.night.bg, nightProgress),
+        ground: lerpColor(colors.day.ground, colors.night.ground, nightProgress),
+        dino: lerpColor(colors.day.dino, colors.night.dino, nightProgress),
+        obstacle: lerpColor(colors.day.obstacle, colors.night.obstacle, nightProgress),
+        text: lerpColor(colors.day.text, colors.night.text, nightProgress)
+      };
     }
 
     // Create obstacle (cactus or bird)
@@ -204,9 +222,8 @@
       // Body
       ctx.fillRect(dino.x, currentY, dino.width, currentHeight);
 
-      // Eye
-      const eyeColor = isNightMode ? '#000' : '#fff';
-      ctx.fillStyle = eyeColor;
+      // Eye (interpolate between white and black based on nightProgress)
+      ctx.fillStyle = lerpColor('#ffffff', '#000000', nightProgress);
       ctx.fillRect(dino.x + 28, currentY + 8, 6, 6);
 
       // Legs (animated when on ground - speed increases with game speed)
@@ -263,9 +280,8 @@
           // Bird head
           ctx.fillRect(obstacle.x + 30, obstacle.y + 5, 15, 15);
 
-          // Eye
-          const eyeColor = isNightMode ? '#000' : '#fff';
-          ctx.fillStyle = eyeColor;
+          // Eye (interpolate between white and black based on nightProgress)
+          ctx.fillStyle = lerpColor('#ffffff', '#000000', nightProgress);
           ctx.fillRect(obstacle.x + 38, obstacle.y + 10, 4, 4);
           ctx.fillStyle = theme.obstacle;
 
@@ -283,7 +299,7 @@
     // Draw clouds (decorative)
     function drawClouds() {
       const theme = getColors();
-      ctx.fillStyle = isNightMode ? '#444' : '#ccc';
+      ctx.fillStyle = lerpColor('#cccccc', '#444444', nightProgress);
 
       // Simple cloud decoration
       const cloudX = ((frameCount * 0.5) % (canvas.width + 100)) - 100;
@@ -292,11 +308,11 @@
       ctx.fillRect(cloudX + 20, 25, 30, 15);
     }
 
-    // Draw stars (night mode only)
+    // Draw stars (fade in during night)
     function drawStars() {
-      if (!isNightMode) return;
+      if (nightProgress <= 0) return;
 
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = `rgba(255, 255, 255, ${nightProgress})`;
       // Static stars based on score
       const starSeed = Math.floor(score / 1000);
       for (let i = 0; i < 20; i++) {
@@ -306,11 +322,11 @@
       }
     }
 
-    // Draw moon (night mode only)
+    // Draw moon (fade in during night)
     function drawMoon() {
-      if (!isNightMode) return;
+      if (nightProgress <= 0) return;
 
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = `rgba(255, 255, 255, ${nightProgress})`;
       ctx.beginPath();
       ctx.arc(canvas.width - 100, 50, 20, 0, Math.PI * 2);
       ctx.fill();
@@ -371,9 +387,26 @@
         score = Math.floor(distance / 10);
         scoreElement.textContent = score;
 
-        // Check for day/night cycle every 1000 points
-        const currentCycle = Math.floor(score / 1000);
-        isNightMode = currentCycle % 2 === 1;
+        // Gradual day/night cycle transition (200 points to transition)
+        const halfTransition = 100;
+        const cyclePos = score % 2000;
+
+        if (cyclePos < halfTransition && score >= 2000 - halfTransition) {
+          // End of night-to-day transition (wraps from previous cycle)
+          nightProgress = 1 - (cyclePos + halfTransition) / (halfTransition * 2);
+        } else if (cyclePos < 1000 - halfTransition) {
+          // Day zone (0-899 in cycle)
+          nightProgress = 0;
+        } else if (cyclePos < 1000 + halfTransition) {
+          // Day-to-night transition (900-1099 in cycle)
+          nightProgress = (cyclePos - (1000 - halfTransition)) / (halfTransition * 2);
+        } else if (cyclePos < 2000 - halfTransition) {
+          // Night zone (1100-1899 in cycle)
+          nightProgress = 1;
+        } else {
+          // Night-to-day transition start (1900-1999 in cycle)
+          nightProgress = 1 - (cyclePos - (2000 - halfTransition)) / (halfTransition * 2);
+        }
       }
     }
 
@@ -447,7 +480,7 @@
       distance = 0;
       frameCount = 0;
       gameSpeed = 6;
-      isNightMode = false;
+      nightProgress = 0;
       obstacles = [];
       nextObstacleFrame = 100;
       dino.y = ground.y - dino.normalHeight;
@@ -468,12 +501,11 @@
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw decorations
-      if (isNightMode) {
+      // Draw decorations (both during transitions for smooth crossfade)
+      drawClouds();
+      if (nightProgress > 0) {
         drawStars();
         drawMoon();
-      } else {
-        drawClouds();
       }
 
       if (!gameStarted) {
@@ -516,7 +548,7 @@
 
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = isNightMode ? '#fff' : '#000';
+        ctx.fillStyle = lerpColor('#000000', '#ffffff', nightProgress);
         ctx.font = 'bold 30px Arial';
         ctx.textAlign = 'center';
         ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
