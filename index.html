@@ -83,7 +83,7 @@
   <div class="container">
     <h1>🦖 Chrome Dino Game</h1>
     <p class="info">Jump over cacti, duck under birds, and watch the day turn to night!</p>
-    <canvas id="gameCanvas" width="800" height="200"></canvas>
+    <canvas id="gameCanvas" width="800" height="200" role="application" aria-label="Chrome Dino Game canvas. Jump over cacti, duck under birds, and watch the day turn to night!"></canvas>
     <div class="score">Score: <span id="score">0</span></div>
     <div class="high-score">High Score: <span id="highScore">0</span></div>
     <div class="game-over" id="gameOver">Game Over! Press SPACE or Click to Restart</div>
@@ -351,7 +351,7 @@
       }
 
       // Increase game speed over time
-      if (frameCount % 100 === 0) {
+      if (frameCount % 100 === 0 && gameStarted && !gameOver) {
         gameSpeed = Math.min(gameSpeed + 0.005, 13);
       }
     }
@@ -584,7 +584,7 @@
     });
 
     // Make canvas focusable
-    canvas.tabIndex = 1;
+    canvas.tabIndex = 0;
 
     // Start game loop
     gameLoop();

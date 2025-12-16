@@ -26,13 +26,14 @@ andreasHovaldt.github.io/
 ### Key Files
 
 #### `index.html`
-- **Purpose:** Main landing page for the website
-- **Structure:** Single-page HTML document with embedded CSS
+- **Purpose:** Main landing page for the website, now featuring an interactive game
+- **Structure:** Single-page HTML document with embedded CSS and JavaScript
 - **Features:**
   - Responsive design with viewport meta tag
   - Centered container layout using Flexbox
   - Clean, minimal design with white container on light gray background
   - Welcome message with GitHub profile link
+  - Complete interactive game implemented with canvas-based graphics and game logic
   - Self-contained (no external dependencies)
 
 #### `CNAME`
@@ -108,7 +109,7 @@ gh pr create --title "PR Title" --body "Description"
 - **Link Color:** `#0366d6` (GitHub blue)
 - **Border Radius:** `8px` for containers
 - **Box Shadow:** `0 0 10px rgba(0,0,0,0.1)` for subtle depth
-- **Container Padding:** `40px`
+- **Container Padding:** `30px`
 - **Layout:** Flexbox-based centering (both horizontal and vertical)
 
 ## AI Assistant Guidelines
