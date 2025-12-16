@@ -114,11 +114,11 @@
     // Dino properties
     const dino = {
       x: 50,
-      y: 150,
-      width: 40,
-      height: 50,
-      normalHeight: 50,
-      duckHeight: 30,
+      y: 135,
+      width: 45,
+      height: 45,
+      normalHeight: 45,
+      duckHeight: 27,
       velocityY: 0,
       gravity: 0.6,
       fastFallGravity: 1.5,
@@ -193,34 +193,160 @@
       nextObstacleFrame = frameCount + Math.floor(Math.random() * 50) + 50;
     }
 
-    // Draw dino
+    // Draw dino - pixel art style
     function drawDino() {
       const theme = getColors();
-      ctx.fillStyle = theme.dino;
-
-      const currentHeight = dino.isDucking ? dino.duckHeight : dino.normalHeight;
-      const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
-
-      // Body
-      ctx.fillRect(dino.x, currentY, dino.width, currentHeight);
-
-      // Eye
       const eyeColor = isNightMode ? '#000' : '#fff';
-      ctx.fillStyle = eyeColor;
-      ctx.fillRect(dino.x + 28, currentY + 8, 6, 6);
+      const px = 3; // pixel size for scaling
 
-      // Legs (animated when on ground - speed increases with game speed)
-      if (currentY >= ground.y - currentHeight && !dino.isDucking) {
-        ctx.fillStyle = theme.dino;
-        const animSpeed = Math.max(2, 7 - gameSpeed / 2);
-        const legOffset = Math.floor(frameCount / animSpeed) % 2 === 0 ? 0 : 4;
-        ctx.fillRect(dino.x + 8, currentY + currentHeight, 6, 8);
-        ctx.fillRect(dino.x + 26 + legOffset, currentY + currentHeight, 6, 8);
+      const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
+      const isOnGround = currentY >= ground.y - (dino.isDucking ? dino.duckHeight : dino.normalHeight) - 1;
+
+      // Animation frame for running (speed increases with game speed)
+      const animSpeed = Math.max(2, 7 - gameSpeed / 2);
+      const runFrame = Math.floor(frameCount / animSpeed) % 2;
+
+      // Helper to draw a pixel
+      function pixel(x, y, color) {
+        ctx.fillStyle = color || theme.dino;
+        ctx.fillRect(dino.x + x * px, currentY + y * px, px, px);
       }
 
-      // Tail
-      ctx.fillStyle = theme.dino;
-      ctx.fillRect(dino.x - 8, currentY + 10, 8, 15);
+      if (dino.isDucking) {
+        // Ducking dino - wider and shorter
+        // Tail (extended back when ducking)
+        pixel(-4, 4, theme.dino);
+        pixel(-3, 4, theme.dino);
+        pixel(-2, 3, theme.dino);
+        pixel(-1, 3, theme.dino);
+
+        // Body (horizontal elongated)
+        for (let x = 0; x <= 12; x++) {
+          for (let y = 2; y <= 6; y++) {
+            pixel(x, y, theme.dino);
+          }
+        }
+
+        // Head (front, lower)
+        for (let x = 10; x <= 14; x++) {
+          for (let y = 1; y <= 5; y++) {
+            pixel(x, y, theme.dino);
+          }
+        }
+
+        // Eye
+        pixel(12, 2, eyeColor);
+
+        // Mouth gap
+        pixel(14, 4, eyeColor);
+        pixel(14, 5, eyeColor);
+
+        // Legs (short when ducking)
+        if (isOnGround && gameStarted && !gameOver) {
+          if (runFrame === 0) {
+            pixel(3, 7, theme.dino);
+            pixel(3, 8, theme.dino);
+            pixel(9, 7, theme.dino);
+          } else {
+            pixel(3, 7, theme.dino);
+            pixel(9, 7, theme.dino);
+            pixel(9, 8, theme.dino);
+          }
+        } else {
+          pixel(3, 7, theme.dino);
+          pixel(9, 7, theme.dino);
+        }
+      } else {
+        // Standing/jumping dino - T-Rex shape
+
+        // Tail (3 segments going back and down)
+        pixel(-3, 6, theme.dino);
+        pixel(-2, 5, theme.dino);
+        pixel(-2, 6, theme.dino);
+        pixel(-1, 4, theme.dino);
+        pixel(-1, 5, theme.dino);
+
+        // Body (main torso)
+        for (let x = 0; x <= 7; x++) {
+          for (let y = 3; y <= 10; y++) {
+            pixel(x, y, theme.dino);
+          }
+        }
+
+        // Neck
+        for (let x = 6; x <= 8; x++) {
+          for (let y = 1; y <= 4; y++) {
+            pixel(x, y, theme.dino);
+          }
+        }
+
+        // Head
+        for (let x = 7; x <= 13; x++) {
+          for (let y = 0; y <= 5; y++) {
+            pixel(x, y, theme.dino);
+          }
+        }
+
+        // Eye
+        pixel(11, 1, eyeColor);
+
+        // Mouth opening (makes it look like T-Rex)
+        pixel(13, 4, eyeColor);
+        pixel(13, 5, eyeColor);
+        pixel(12, 5, eyeColor);
+
+        // Small arm
+        pixel(7, 7, theme.dino);
+        pixel(8, 7, theme.dino);
+        pixel(8, 8, theme.dino);
+
+        // Legs with running animation
+        if (isOnGround && gameStarted && !gameOver) {
+          // Running animation - two distinct leg positions
+          if (runFrame === 0) {
+            // Frame 1: Left leg forward, right leg back
+            // Left leg (forward)
+            pixel(2, 11, theme.dino);
+            pixel(2, 12, theme.dino);
+            pixel(2, 13, theme.dino);
+            pixel(1, 13, theme.dino); // foot forward
+            pixel(2, 14, theme.dino);
+
+            // Right leg (back)
+            pixel(5, 11, theme.dino);
+            pixel(6, 12, theme.dino);
+            pixel(7, 13, theme.dino);
+            pixel(7, 14, theme.dino);
+          } else {
+            // Frame 2: Right leg forward, left leg back
+            // Left leg (back)
+            pixel(2, 11, theme.dino);
+            pixel(1, 12, theme.dino);
+            pixel(0, 13, theme.dino);
+            pixel(0, 14, theme.dino);
+
+            // Right leg (forward)
+            pixel(5, 11, theme.dino);
+            pixel(5, 12, theme.dino);
+            pixel(5, 13, theme.dino);
+            pixel(6, 13, theme.dino); // foot forward
+            pixel(5, 14, theme.dino);
+          }
+        } else {
+          // Standing still or jumping - both legs straight
+          // Left leg
+          pixel(2, 11, theme.dino);
+          pixel(2, 12, theme.dino);
+          pixel(2, 13, theme.dino);
+          pixel(2, 14, theme.dino);
+
+          // Right leg
+          pixel(5, 11, theme.dino);
+          pixel(5, 12, theme.dino);
+          pixel(5, 13, theme.dino);
+          pixel(5, 14, theme.dino);
+        }
+      }
     }
 
     // Draw ground
@@ -379,11 +505,15 @@
 
     // Check collision with improved hitboxes
     function checkCollision() {
+      const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
+      const currentHeight = dino.isDucking ? dino.duckHeight : dino.normalHeight;
+
+      // Hitbox that matches the pixel art body (not including tail/legs)
       const dinoBox = {
-        x: dino.x + 5,
-        y: dino.y + 5,
-        width: dino.width - 10,
-        height: dino.height - 10
+        x: dino.x + 3,
+        y: currentY + 3,
+        width: dino.width - 6,
+        height: currentHeight - 12
       };
 
       for (let obstacle of obstacles) {
