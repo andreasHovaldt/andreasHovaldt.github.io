@@ -104,6 +104,7 @@
     let gameStarted = false;
     let gameOver = false;
     let score = 0;
+    let distance = 0;
     let highScore = localStorage.getItem('dinoHighScore') || 0;
     highScoreElement.textContent = highScore;
     let frameCount = 0;
@@ -120,9 +121,11 @@
       duckHeight: 30,
       velocityY: 0,
       gravity: 0.6,
+      fastFallGravity: 1.5,
       jumpPower: -13,
       isJumping: false,
-      isDucking: false
+      isDucking: false,
+      isFastFalling: false
     };
 
     // Ground
@@ -206,10 +209,11 @@
       ctx.fillStyle = eyeColor;
       ctx.fillRect(dino.x + 28, currentY + 8, 6, 6);
 
-      // Legs (animated when on ground)
+      // Legs (animated when on ground - speed increases with game speed)
       if (currentY >= ground.y - currentHeight && !dino.isDucking) {
         ctx.fillStyle = theme.dino;
-        const legOffset = Math.floor(frameCount / 5) % 2 === 0 ? 0 : 4;
+        const animSpeed = Math.max(2, 7 - gameSpeed / 2);
+        const legOffset = Math.floor(frameCount / animSpeed) % 2 === 0 ? 0 : 4;
         ctx.fillRect(dino.x + 8, currentY + currentHeight, 6, 8);
         ctx.fillRect(dino.x + 26 + legOffset, currentY + currentHeight, 6, 8);
       }
@@ -316,7 +320,9 @@
     function updateDino() {
       // Jumping physics
       if (dino.isJumping || dino.y < ground.y - dino.height) {
-        dino.velocityY += dino.gravity;
+        // Apply gravity (faster if fast falling)
+        const currentGravity = dino.isFastFalling ? dino.fastFallGravity : dino.gravity;
+        dino.velocityY += currentGravity;
         dino.y += dino.velocityY;
 
         const targetY = ground.y - (dino.isDucking ? dino.duckHeight : dino.normalHeight);
@@ -325,6 +331,7 @@
           dino.y = targetY;
           dino.velocityY = 0;
           dino.isJumping = false;
+          dino.isFastFalling = false;
         }
       }
 
@@ -359,12 +366,13 @@
     // Update score (distance-based)
     function updateScore() {
       if (!gameOver && gameStarted) {
-        score++;
-        scoreElement.textContent = Math.floor(score / 10);
+        // Distance traveled is based on game speed (pixels moved per frame)
+        distance += gameSpeed;
+        score = Math.floor(distance / 10);
+        scoreElement.textContent = score;
 
         // Check for day/night cycle every 1000 points
-        const displayScore = Math.floor(score / 10);
-        const currentCycle = Math.floor(displayScore / 1000);
+        const currentCycle = Math.floor(score / 1000);
         isNightMode = currentCycle % 2 === 1;
       }
     }
@@ -411,6 +419,10 @@
     function duck() {
       if (!dino.isJumping) {
         dino.isDucking = true;
+      } else {
+        // Fast fall when ducking in air
+        dino.isFastFalling = true;
+        dino.isDucking = true;
       }
     }
 
@@ -425,14 +437,14 @@
       gameStarted = true;
 
       // Update high score
-      const finalScore = Math.floor(score / 10);
-      if (finalScore > highScore) {
-        highScore = finalScore;
+      if (score > highScore) {
+        highScore = score;
         localStorage.setItem('dinoHighScore', highScore);
         highScoreElement.textContent = highScore;
       }
 
       score = 0;
+      distance = 0;
       frameCount = 0;
       gameSpeed = 6;
       isNightMode = false;
@@ -443,6 +455,7 @@
       dino.velocityY = 0;
       dino.isJumping = false;
       dino.isDucking = false;
+      dino.isFastFalling = false;
       scoreElement.textContent = '0';
       gameOverElement.style.display = 'none';
     }
@@ -484,9 +497,8 @@
           gameOverElement.style.display = 'block';
 
           // Update high score
-          const finalScore = Math.floor(score / 10);
-          if (finalScore > highScore) {
-            highScore = finalScore;
+          if (score > highScore) {
+            highScore = score;
             localStorage.setItem('dinoHighScore', highScore);
             highScoreElement.textContent = highScore;
           }
@@ -509,7 +521,7 @@
         ctx.textAlign = 'center';
         ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 20);
         ctx.font = '18px Arial';
-        ctx.fillText('Score: ' + Math.floor(score / 10), canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText('Score: ' + score, canvas.width / 2, canvas.height / 2 + 20);
       }
 
       requestAnimationFrame(gameLoop);
