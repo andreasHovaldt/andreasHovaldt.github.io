@@ -482,14 +482,6 @@
         if (checkCollision()) {
           gameOver = true;
           gameOverElement.style.display = 'block';
-
-          // Update high score
-          const finalScore = Math.floor(score / 10);
-          if (finalScore > highScore) {
-            highScore = finalScore;
-            localStorage.setItem('dinoHighScore', highScore);
-            highScoreElement.textContent = highScore;
-          }
         }
 
         // Draw everything
