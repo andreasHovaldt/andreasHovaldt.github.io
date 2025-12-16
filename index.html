@@ -86,7 +86,7 @@
     <canvas id="gameCanvas" width="800" height="200" role="application" aria-label="Chrome Dino Game canvas. Jump over cacti, duck under birds, and watch the day turn to night!"></canvas>
     <div class="score">Score: <span id="score">0</span></div>
     <div class="high-score">High Score: <span id="highScore">0</span></div>
-    <div class="game-over" id="gameOver">Game Over! Press SPACE to Restart</div>
+    <div class="game-over" id="gameOver">Game Over! SPACE: Classic | ENTER: Shooting</div>
     <div class="bird-score" id="birdScore" style="display: none; margin-top: 5px; font-size: 16px; color: #d63031;"></div>
     <div class="controls">SPACE: Classic Mode | ENTER: Shooting Mode | UP/W: Jump | DOWN/S: Duck</div>
     <div class="footer">
@@ -121,6 +121,8 @@
     let explosions = [];
     let mouseX = canvas.width / 2;
     let mouseY = canvas.height / 2;
+    let lastShotTime = 0;
+    const shootCooldown = 300; // 0.3 seconds in milliseconds
 
     // Dino properties
     const dino = {
@@ -404,8 +406,12 @@
       ctx.restore();
     }
 
-    // Create bullet
+    // Create bullet (with cooldown check)
     function createBullet() {
+      const now = Date.now();
+      if (now - lastShotTime < shootCooldown) return; // Cooldown not ready
+      lastShotTime = now;
+
       const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
       const gunX = dino.x + (dino.isDucking ? 40 : 30);
       const gunY = currentY + (dino.isDucking ? 12 : 21);
@@ -914,23 +920,19 @@
     let keysPressed = {};
 
     document.addEventListener('keydown', (e) => {
-      // Space - Start classic mode or restart in classic mode
+      // Space - Start/restart classic mode
       if (e.code === 'Space') {
         e.preventDefault();
-        if (!gameStarted) {
+        if (!gameStarted || gameOver) {
           resetGame('classic');
-        } else if (gameOver) {
-          resetGame(gameMode);
         }
       }
 
-      // Enter - Start shooting mode or restart in shooting mode
+      // Enter - Start/restart shooting mode
       if (e.code === 'Enter') {
         e.preventDefault();
-        if (!gameStarted) {
+        if (!gameStarted || gameOver) {
           resetGame('shooting');
-        } else if (gameOver) {
-          resetGame(gameMode);
         }
       }
 
