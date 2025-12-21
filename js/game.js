@@ -20,6 +20,13 @@ const highScoreElement = document.getElementById('highScore');
 const gameOverElement = document.getElementById('gameOver');
 const birdScoreElement = document.getElementById('birdScore');
 
+// Delta time variables for frame-rate independent movement
+const TARGET_FPS = 60;
+const TARGET_FRAME_TIME = 1000 / TARGET_FPS; // ~16.67ms
+let lastTime = 0;
+let deltaTime = 0;
+let gameTime = 0; // Total game time in milliseconds
+
 // Game variables
 let gameStarted = false;
 let gameOver = false;
@@ -29,9 +36,15 @@ let distance = 0;
 let highScore = localStorage.getItem('dinoHighScore') || 0;
 let highScoreShooting = localStorage.getItem('dinoHighScoreShooting') || 0;
 highScoreElement.textContent = highScore;
-let frameCount = 0;
-let gameSpeed = 6;
+let gameSpeed = 360; // pixels per second (was 6 per frame * 60 fps)
 let nightProgress = 0; // 0 = day, 1 = night (gradual transition)
+
+// Timing variables (in milliseconds)
+let lastSpeedIncreaseTime = 0;
+let nextObstacleTime = 0;
+const OBSTACLE_SPAWN_MIN = 833; // ~50 frames at 60fps
+const OBSTACLE_SPAWN_MAX = 1667; // ~100 frames at 60fps
+const SPEED_INCREASE_INTERVAL = 1000; // Increase speed every second
 
 // Shooting mode variables
 let birdsKilled = 0;
@@ -42,7 +55,7 @@ let mouseY = canvas.height / 2;
 let lastShotTime = 0;
 const shootCooldown = 300; // 0.3 seconds in milliseconds
 
-// Dino properties
+// Dino properties (converted to per-second values)
 const dino = {
   x: 50,
   y: 135,
@@ -51,13 +64,13 @@ const dino = {
   normalHeight: 45,
   duckHeight: 27,
   velocityY: 0,
-  gravity: 0.6,
-  fastFallGravity: 1.5,
-  jumpPower: -13,
+  gravity: 2160, // pixels per second squared (was 0.6 * 60 * 60)
+  fastFallGravity: 5400, // pixels per second squared (was 1.5 * 60 * 60)
+  jumpPower: -780, // pixels per second (was -13 * 60)
   isJumping: false,
   isDucking: false,
   isFastFalling: false,
-  moveSpeed: 5,
+  moveSpeed: 300, // pixels per second (was 5 * 60)
   minX: 10,
   maxX: 750
 };
@@ -70,7 +83,6 @@ const ground = {
 
 // Obstacles array
 let obstacles = [];
-let nextObstacleFrame = 100;
 
 // Colors for day/night
 const colors = {
@@ -141,8 +153,11 @@ function createObstacle() {
     });
   }
 
-  // Calculate next obstacle spawn time (random interval)
-  nextObstacleFrame = frameCount + Math.floor(Math.random() * 50) + 50;
+  // Calculate next obstacle spawn time (random interval, scaled by game speed)
+  const baseInterval = Math.random() * (OBSTACLE_SPAWN_MAX - OBSTACLE_SPAWN_MIN) + OBSTACLE_SPAWN_MIN;
+  // Reduce spawn interval as game speeds up (but not too much)
+  const speedFactor = 360 / gameSpeed;
+  nextObstacleTime = gameTime + baseInterval * Math.max(0.5, speedFactor);
 }
 
 // Draw dino - pixel art style
@@ -154,9 +169,9 @@ function drawDino() {
   const currentY = dino.isDucking && !dino.isJumping ? ground.y - dino.duckHeight : dino.y;
   const isOnGround = currentY >= ground.y - (dino.isDucking ? dino.duckHeight : dino.normalHeight) - 1;
 
-  // Animation frame for running (speed increases with game speed)
-  const animSpeed = Math.max(2, 7 - gameSpeed / 2);
-  const runFrame = Math.floor(frameCount / animSpeed) % 2;
+  // Animation frame for running (time-based, ~8 frames per second)
+  const animInterval = Math.max(60, 150 - gameSpeed / 6); // ms per frame
+  const runFrame = Math.floor(gameTime / animInterval) % 2;
 
   // Helper to draw a pixel
   function pixel(x, y, color) {
@@ -338,11 +353,12 @@ function createBullet() {
   const gunY = currentY + (dino.isDucking ? 12 : 21);
   const angle = Math.atan2(mouseY - gunY, mouseX - gunX);
 
+  const bulletSpeed = 900; // pixels per second (was 15 * 60)
   bullets.push({
     x: gunX + Math.cos(angle) * 20,
     y: gunY + Math.sin(angle) * 20,
-    vx: Math.cos(angle) * 15,
-    vy: Math.sin(angle) * 15
+    vx: Math.cos(angle) * bulletSpeed,
+    vy: Math.sin(angle) * bulletSpeed
   });
 }
 
@@ -357,10 +373,10 @@ function drawBullets() {
 }
 
 // Update bullets
-function updateBullets() {
+function updateBullets(dt) {
   bullets.forEach(bullet => {
-    bullet.x += bullet.vx;
-    bullet.y += bullet.vy;
+    bullet.x += bullet.vx * dt;
+    bullet.y += bullet.vy * dt;
   });
 
   // Remove off-screen bullets
@@ -372,15 +388,15 @@ function createExplosion(x, y) {
   explosions.push({
     x: x,
     y: y,
-    frame: 0,
-    maxFrames: 15
+    elapsed: 0,
+    duration: 250 // milliseconds (was 15 frames at 60fps)
   });
 }
 
 // Draw explosions
 function drawExplosions() {
   explosions.forEach(exp => {
-    const progress = exp.frame / exp.maxFrames;
+    const progress = exp.elapsed / exp.duration;
     const radius = 10 + progress * 25;
     const alpha = 1 - progress;
 
@@ -405,13 +421,13 @@ function drawExplosions() {
 }
 
 // Update explosions
-function updateExplosions() {
+function updateExplosions(dt) {
   explosions.forEach(exp => {
-    exp.frame++;
+    exp.elapsed += dt * 1000; // Convert to milliseconds
   });
 
   // Remove finished explosions
-  explosions = explosions.filter(exp => exp.frame < exp.maxFrames);
+  explosions = explosions.filter(exp => exp.elapsed < exp.duration);
 }
 
 // Check bullet-bird collisions
@@ -453,11 +469,11 @@ function drawGround() {
   ctx.fillStyle = theme.ground;
   ctx.fillRect(0, ground.y, canvas.width, ground.height);
 
-  // Ground line pattern
+  // Ground line pattern (based on distance traveled, not frames)
   ctx.strokeStyle = theme.ground;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  const offset = (frameCount * gameSpeed) % 20;
+  const offset = (distance * 0.1) % 20; // Use distance for consistent scrolling
   for (let i = -20; i < canvas.width; i += 20) {
     ctx.moveTo(i + offset, ground.y);
     ctx.lineTo(i + 10 + offset, ground.y);
@@ -492,8 +508,9 @@ function drawObstacles() {
       ctx.fillRect(obstacle.x + 38, obstacle.y + 10, 4, 4);
       ctx.fillStyle = theme.obstacle;
 
-      // Wings (animated)
-      const wingOffset = Math.floor(frameCount / 5) % 2 === 0 ? -5 : 5;
+      // Wings (animated - time-based)
+      const wingFrame = Math.floor(gameTime / 83) % 2; // ~12 fps wing animation
+      const wingOffset = wingFrame === 0 ? -5 : 5;
       ctx.fillRect(obstacle.x + 5, obstacle.y + 15 + wingOffset, 20, 5);
       ctx.fillRect(obstacle.x + 25, obstacle.y + 15 - wingOffset, 20, 5);
 
@@ -508,8 +525,9 @@ function drawClouds() {
   const theme = getColors();
   ctx.fillStyle = lerpColor('#cccccc', '#444444', nightProgress);
 
-  // Simple cloud decoration
-  const cloudX = ((frameCount * 0.5) % (canvas.width + 100)) - 100;
+  // Simple cloud decoration (time-based movement)
+  const cloudSpeed = 30; // pixels per second
+  const cloudX = ((gameTime * cloudSpeed / 1000) % (canvas.width + 100)) - 100;
   ctx.fillRect(cloudX, 30, 40, 15);
   ctx.fillRect(cloudX + 10, 20, 30, 15);
   ctx.fillRect(cloudX + 20, 25, 30, 15);
@@ -540,13 +558,13 @@ function drawMoon() {
 }
 
 // Update dino physics
-function updateDino() {
+function updateDino(dt) {
   // Jumping physics
   if (dino.isJumping || dino.y < ground.y - dino.height) {
     // Apply gravity (faster if fast falling)
     const currentGravity = dino.isFastFalling ? dino.fastFallGravity : dino.gravity;
-    dino.velocityY += currentGravity;
-    dino.y += dino.velocityY;
+    dino.velocityY += currentGravity * dt;
+    dino.y += dino.velocityY * dt;
 
     const targetY = ground.y - (dino.isDucking ? dino.duckHeight : dino.normalHeight);
 
@@ -566,31 +584,32 @@ function updateDino() {
 }
 
 // Update obstacles
-function updateObstacles() {
+function updateObstacles(dt) {
   // Move obstacles
   obstacles.forEach(obstacle => {
-    obstacle.x -= gameSpeed;
+    obstacle.x -= gameSpeed * dt;
   });
 
   // Remove off-screen obstacles
   obstacles = obstacles.filter(obstacle => obstacle.x + obstacle.width > 0);
 
-  // Create new obstacles
-  if (frameCount >= nextObstacleFrame && gameStarted && !gameOver) {
+  // Create new obstacles (time-based)
+  if (gameTime >= nextObstacleTime && gameStarted && !gameOver) {
     createObstacle();
   }
 
-  // Increase game speed over time (accelerates as you play, no cap)
-  if (frameCount % 60 === 0 && gameStarted && !gameOver) {
-    gameSpeed += 0.1;
+  // Increase game speed over time (every second)
+  if (gameTime - lastSpeedIncreaseTime >= SPEED_INCREASE_INTERVAL && gameStarted && !gameOver) {
+    gameSpeed += 6; // was 0.1 per frame * 60 fps = 6 per second
+    lastSpeedIncreaseTime = gameTime;
   }
 }
 
 // Update score (distance-based)
-function updateScore() {
+function updateScore(dt) {
   if (!gameOver && gameStarted) {
-    // Distance traveled is based on game speed (pixels moved per frame)
-    distance += gameSpeed;
+    // Distance traveled is based on game speed
+    distance += gameSpeed * dt;
     score = Math.floor(distance / 10);
     scoreElement.textContent = score;
 
@@ -700,11 +719,12 @@ function resetGame(mode) {
 
   score = 0;
   distance = 0;
-  frameCount = 0;
-  gameSpeed = 6;
+  gameTime = 0;
+  lastSpeedIncreaseTime = 0;
+  gameSpeed = 360; // Reset to initial speed (pixels per second)
   nightProgress = 0;
   obstacles = [];
-  nextObstacleFrame = 100;
+  nextObstacleTime = OBSTACLE_SPAWN_MIN + Math.random() * (OBSTACLE_SPAWN_MAX - OBSTACLE_SPAWN_MIN);
   dino.x = 50;
   dino.y = ground.y - dino.normalHeight;
   dino.height = dino.normalHeight;
@@ -722,8 +742,23 @@ function resetGame(mode) {
   explosions = [];
 }
 
-// Game loop
-function gameLoop() {
+// Game loop with delta time
+function gameLoop(currentTime) {
+  // Calculate delta time
+  if (lastTime === 0) {
+    lastTime = currentTime;
+  }
+  deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+  lastTime = currentTime;
+
+  // Cap delta time to prevent huge jumps (e.g., when tab is inactive)
+  deltaTime = Math.min(deltaTime, 0.1);
+
+  // Update game time
+  if (gameStarted && !gameOver) {
+    gameTime += deltaTime * 1000; // Track in milliseconds
+  }
+
   const theme = getColors();
 
   // Clear canvas with theme background
@@ -747,25 +782,24 @@ function gameLoop() {
     drawGround();
     drawDino();
   } else if (!gameOver) {
-    // Update game
-    frameCount++;
-    updateDino();
+    // Update game with delta time
+    updateDino(deltaTime);
 
-    // Horizontal movement
+    // Horizontal movement (delta time based)
     if (keysPressed['ArrowLeft'] || keysPressed['KeyA']) {
-      dino.x = Math.max(dino.minX, dino.x - dino.moveSpeed);
+      dino.x = Math.max(dino.minX, dino.x - dino.moveSpeed * deltaTime);
     }
     if (keysPressed['ArrowRight'] || keysPressed['KeyD']) {
-      dino.x = Math.min(dino.maxX, dino.x + dino.moveSpeed);
+      dino.x = Math.min(dino.maxX, dino.x + dino.moveSpeed * deltaTime);
     }
 
-    updateObstacles();
-    updateScore();
+    updateObstacles(deltaTime);
+    updateScore(deltaTime);
 
     // Shooting mode updates
     if (gameMode === 'shooting') {
-      updateBullets();
-      updateExplosions();
+      updateBullets(deltaTime);
+      updateExplosions(deltaTime);
       checkBulletCollisions();
     }
 
@@ -823,7 +857,7 @@ function gameLoop() {
     // Draw remaining explosions
     if (gameMode === 'shooting') {
       drawExplosions();
-      updateExplosions();
+      updateExplosions(deltaTime);
     }
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -964,5 +998,5 @@ canvas.addEventListener('touchend', (e) => {
 // Make canvas focusable
 canvas.tabIndex = 0;
 
-// Start game loop
-gameLoop();
+// Start game loop with requestAnimationFrame timestamp
+requestAnimationFrame(gameLoop);
