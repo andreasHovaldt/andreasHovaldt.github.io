@@ -36,7 +36,7 @@ let distance = 0;
 let highScore = localStorage.getItem('dinoHighScore') || 0;
 let highScoreShooting = localStorage.getItem('dinoHighScoreShooting') || 0;
 highScoreElement.textContent = highScore;
-let gameSpeed = 360; // pixels per second (was 6 per frame * 60 fps)
+let gameSpeed = 480; // pixels per second (was 6 per frame * 60 fps)
 let nightProgress = 0; // 0 = day, 1 = night (gradual transition)
 
 // Timing variables (in milliseconds)
@@ -66,7 +66,7 @@ const dino = {
   velocityY: 0,
   gravity: 2160, // pixels per second squared (was 0.6 * 60 * 60)
   fastFallGravity: 5400, // pixels per second squared (was 1.5 * 60 * 60)
-  jumpPower: -780, // pixels per second (was -13 * 60)
+  jumpPower: -730, // pixels per second (was -13 * 60)
   isJumping: false,
   isDucking: false,
   isFastFalling: false,
